@@ -66,7 +66,9 @@ def playerStandings():
     conn = connect()
     c = conn.cursor()
     c.execute('SELECT id, name, wins, matches FROM players ORDER BY wins DESC;')
-    return c.fetchall()
+    standings = c.fetchall()
+    conn.close()
+    return standings
 
 
 def reportMatch(winner, loser):
@@ -108,10 +110,9 @@ def swissPairings():
     """
     conn = connect()
     c = conn.cursor()
-    #NEED TO ADD A REQUIREMENT TO QUERY SO THAT IT AVOIDS REMATCHES
-    #YOU ALREADY PREVENT THEM FROM BEING ADDED BUT DON'T WANT TO SUGGEST
-    #THESE MATCHES
-    c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE p1.wins = p2.wins AND p1.id < p2.id;')
-    return c.fetchall()
+    c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE p1.wins = p2.wins AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id);')
+    pairings = c.fetchall()
+    conn.close()
+    return pairings
 
 
