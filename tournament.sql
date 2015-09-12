@@ -8,5 +8,5 @@
 
 CREATE DATABASE tournament;
 \c tournament;
-CREATE TABLE players(id SERIAL PRIMARY KEY, name TEXT, wins INT, matches INT);
+CREATE TABLE players(id SERIAL PRIMARY KEY, name TEXT, wins INT, matches INT, bye BOOLEAN);
 CREATE TABLE matches(id SERIAL PRIMARY KEY, winner INT REFERENCES players(id), loser INT REFERENCES players(id));

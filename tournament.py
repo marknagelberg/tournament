@@ -110,7 +110,31 @@ def swissPairings():
     """
     conn = connect()
     c = conn.cursor()
-    c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE p1.wins = p2.wins AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id);')
+    #Need to make some sort of indicator that a person has received
+    #a bye (new variable in players table). Need to first determine
+    #the number of matches - if odd, then need to assign a bye each
+    #round. Also need to deal with situation where there is odd number
+    #of people with a given number of wins - need them to face someone 
+    #with the next highest match points.
+    num_players = countPlayers()
+    if num_players % 2 == 0:
+        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id);')
+    else:
+        #Assign a person a bye (that hasn't been assigned one already)
+        #Add a win to that person's record
+
+        #Select all players that haven't received a BYE
+        c.execute('SELECT id FROM players WHERE bye = FALSE;')
+        no_bye_players = c.fetchall()
+        #Choose one of these players randomly
+        bye_player = no_bye_players[int(random.uniform(0, len(no_bye_players)))]
+        #Add a win to the player selected for the bye
+        c.execute('UPDATE players SET wins = wins + 1 WHERE id = %s;', (bye_player,))
+        conn.commit()
+        #Now player has received bye - set bye = TRUE
+        c.execute('UPDATE players SET bye = TRUE WHERE id = %s;', (bye_player,))
+        conn.commit()
+        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id != %s AND p2.id != %s AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id);', (bye_player,bye_player))
     pairings = c.fetchall()
     conn.close()
     return pairings
