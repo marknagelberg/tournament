@@ -118,7 +118,7 @@ def swissPairings():
     #with the next highest match points.
     num_players = countPlayers()
     if num_players % 2 == 0:
-        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id);')
+        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id) ORDER BY p1.id, p1.wins DESC, p2.wins DESC;')
     else:
         #Assign a person a bye (that hasn't been assigned one already)
         #Add a win to that person's record
@@ -134,7 +134,7 @@ def swissPairings():
         #Now player has received bye - set bye = TRUE
         c.execute('UPDATE players SET bye = TRUE WHERE id = %s;', (bye_player,))
         conn.commit()
-        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id != %s AND p2.id != %s AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id);', (bye_player,bye_player))
+        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id != %s AND p2.id != %s AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id) ORDER BY p1.id, p1.wins DESC, p2.wins DESC;', (bye_player,bye_player))
     pairings = c.fetchall()
     conn.close()
     return pairings
