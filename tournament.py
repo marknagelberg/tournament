@@ -65,7 +65,12 @@ def playerStandings():
     """
     conn = connect()
     c = conn.cursor()
-    c.execute('SELECT id, name, wins, matches FROM players ORDER BY wins DESC;')
+    #Create a table as a view that contains player ids and all of the 
+    #opponents that player has had. (Next step will be to joining with 
+    #matches table and aggregating to get OMW.
+    c.execute('CREATE VIEW playermatches AS SELECT players.id AS pid, CASE WHEN winner = players.id THEN loser WHEN loser = players.id THEN winner END AS opponent FROM players, matches WHERE players.id = winner OR players.id = loser')
+    c.execute('CREATE VIEW omwtable AS SELECT id, COUNT(opponent) AS omw FROM playermatches, matches WHERE playermatches.opponent = winner GROUP BY id;')
+    c.execute('SELECT players.id, name, wins, matches FROM players LEFT OUTER JOIN omwtable ON (players.id = omwtable.id) ORDER BY wins DESC, omwtable.omw DESC;')
     standings = c.fetchall()
     conn.close()
     return standings
