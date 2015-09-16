@@ -45,7 +45,7 @@ def registerPlayer(name):
     """
     conn = connect()
     c = conn.cursor()
-    c.execute('INSERT INTO players (name, wins, matches) values (%s, 0, 0);', (name,))
+    c.execute('INSERT INTO players (name, wins, draws, matches) values (%s, 0, 0, 0);', (name,))
     conn.commit()
     conn.close()
 
@@ -70,7 +70,7 @@ def playerStandings():
     #matches table and aggregating to get OMW.
     c.execute('CREATE VIEW playermatches AS SELECT players.id AS pid, CASE WHEN winner = players.id THEN loser WHEN loser = players.id THEN winner END AS opponent FROM players, matches WHERE players.id = winner OR players.id = loser')
     c.execute('CREATE VIEW omwtable AS SELECT id, COUNT(opponent) AS omw FROM playermatches, matches WHERE playermatches.opponent = winner GROUP BY id;')
-    c.execute('SELECT players.id, name, wins, matches FROM players LEFT OUTER JOIN omwtable ON (players.id = omwtable.id) ORDER BY wins DESC, omwtable.omw DESC;')
+    c.execute('SELECT players.id, name, wins, matches FROM players LEFT OUTER JOIN omwtable ON (players.id = omwtable.id) ORDER BY (wins*3 + draws) DESC, omwtable.omw DESC;')
     standings = c.fetchall()
     conn.close()
     return standings
@@ -123,7 +123,7 @@ def swissPairings():
     #with the next highest match points.
     num_players = countPlayers()
     if num_players % 2 == 0:
-        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id) ORDER BY p1.id, p1.wins DESC, p2.wins DESC;')
+        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id) ORDER BY p1.id, (p1.wins * 3 + p1.draws) DESC, (p2.wins * 3 + p2.draws) DESC;')
     else:
         #Assign a person a bye (that hasn't been assigned one already)
         #Add a win to that person's record
