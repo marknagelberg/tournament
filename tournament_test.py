@@ -124,6 +124,19 @@ def testPairings():
             "After one match, players with one win should be paired.")
     print "8. After one match, players with one win are paired."
 
+def testOddPairings():
+  deleteMatches()
+  deletePlayers()
+  registerPlayer("Twilight Sparkle")
+  registerPlayer("Fluttershy")
+  registerPlayer("Applejack")
+  pairings = swissPairings()
+  if len(pairings) < 1:
+    raise ValueError("Didn't return any pairs! Should have returned one!")
+  if len(pairings) > 1:
+    raise ValueError("Returned too many pairs! Should have returned one!")
+  print "9. After registering 3 (odd) players, only two paired."
+
 
 if __name__ == '__main__':
     testDeleteMatches()
@@ -134,6 +147,7 @@ if __name__ == '__main__':
     testStandingsBeforeMatches()
     testReportMatches()
     testPairings()
+    testOddPairings()
     print "Success!  All tests pass!"
 
 
