@@ -135,7 +135,21 @@ def testOddPairings():
     raise ValueError("Didn't return any pairs! Should have returned one!")
   if len(pairings) > 1:
     raise ValueError("Returned too many pairs! Should have returned one!")
-  print "9. After registering 3 (odd) players, only two paired."
+  registerPlayer("Foo")
+  registerPlayer("Bar")
+  deleteMatches()
+  deletePlayers()
+  registerPlayer("Twilight Sparkle")
+  registerPlayer("Fluttershy")
+  registerPlayer("Applejack")
+  registerPlayer("Foo")
+  registerPlayer("Bar")
+  pairings = swissPairings()
+  if len(pairings) != 2:
+    print len(pairings)
+    print pairings
+    raise ValueError("With 5 players, only two pairings should be selected!")
+  print "9. After registering odd players, correct number paired."
 
 
 if __name__ == '__main__':
