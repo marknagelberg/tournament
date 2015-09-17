@@ -45,7 +45,7 @@ def registerPlayer(name):
     """
     conn = connect()
     c = conn.cursor()
-    c.execute('INSERT INTO players (name, wins, draws, matches) values (%s, 0, 0, 0);', (name,))
+    c.execute('INSERT INTO players (name, wins, draws, matches, bye) values (%s, 0, 0, 0, FALSE);', (name,))
     conn.commit()
     conn.close()
 
@@ -113,35 +113,34 @@ def swissPairings():
         id2: the second player's unique id
         name2: the second player's name
     """
-    conn = connect()
-    c = conn.cursor()
-    #Need to make some sort of indicator that a person has received
-    #a bye (new variable in players table). Need to first determine
-    #the number of matches - if odd, then need to assign a bye each
-    #round. Also need to deal with situation where there is odd number
-    #of people with a given number of wins - need them to face someone 
-    #with the next highest match points.
-    num_players = countPlayers()
-    if num_players % 2 == 0:
-        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id) ORDER BY p1.id, (p1.wins * 3 + p1.draws) DESC, (p2.wins * 3 + p2.draws) DESC;')
-    else:
+    ranked_players = playerStandings()
+    odd_num_players = len(ranked_players) % 2
+
+    pairs = []
+    if odd_num_players:
         #Assign a person a bye (that hasn't been assigned one already)
         #Add a win to that person's record
-
+        conn = connect()
+        c = conn.cursor()
         #Select all players that haven't received a BYE
-        c.execute('SELECT id FROM players WHERE bye = FALSE;')
-        no_bye_players = c.fetchall()
-        #Choose one of these players randomly
-        bye_player = no_bye_players[int(random.uniform(0, len(no_bye_players)))]
+        c.execute('SELECT id, name, wins, matches FROM players WHERE bye = FALSE;')
+        bye_player = c.fetchone()
         #Add a win to the player selected for the bye
-        c.execute('UPDATE players SET wins = wins + 1 WHERE id = %s;', (bye_player,))
-        conn.commit()
+        c.execute('UPDATE players SET wins = wins + 1 WHERE id = %s;', (bye_player[0],))
         #Now player has received bye - set bye = TRUE
-        c.execute('UPDATE players SET bye = TRUE WHERE id = %s;', (bye_player,))
+        c.execute('UPDATE players SET bye = TRUE WHERE id = %s;', (bye_player[0],))
         conn.commit()
-        c.execute('SELECT DISTINCT ON (p1.id) p1.id, p1.name, p2.id, p2.name FROM players AS p1, players AS p2 WHERE (p1.wins = p2.wins OR p1.wins - 1 = p2.wins) AND p1.id != %s AND p2.id != %s AND p1.id < p2.id AND NOT EXISTS(SELECT * from matches where winner = p1.id AND loser = p2.id OR winner = p2.id AND loser = p1.id) ORDER BY p1.id, p1.wins DESC, p2.wins DESC;', (bye_player,bye_player))
-    pairings = c.fetchall()
-    conn.close()
-    return pairings
+        print ranked_players
+        print bye_player
+        ranked_players.remove(bye_player)
+        conn.close()
+    #Now ranked_players must have an odd number of players
+    #so we pop them off in pairs in order of rank (want adjacent
+    #players playing each other) to build the pairs return array
+    while ranked_players:
+      player1 = ranked_players.pop(0)[:2]
+      player2 = ranked_players.pop(0)[:2]
+      pairs.append(player1 + player2)
+    return pairs
 
 
