@@ -113,34 +113,44 @@ def swissPairings():
         id2: the second player's unique id
         name2: the second player's name
     """
+
+    #Takes the form [(player1, name1, ...), (player2, name2, ...), ...]
     ranked_players = playerStandings()
+
+    #Must assign a bye if there are odd # players
     odd_num_players = len(ranked_players) % 2
 
+    #Initialize array of pairs to return
     pairs = []
+
+    #Assign a bye, add a win and bye to their record
     if odd_num_players:
-        #Assign a person a bye (that hasn't been assigned one already)
-        #Add a win to that person's record
         conn = connect()
         c = conn.cursor()
-        #Select all players that haven't received a BYE
-        c.execute('SELECT id, name, wins, matches FROM players WHERE bye = FALSE;')
+        c.execute('''SELECT id,
+                          name,
+                          wins,
+                          matches
+                   FROM players
+                   WHERE bye = FALSE;''')
         bye_player = c.fetchone()
-        #Add a win to the player selected for the bye
-        c.execute('UPDATE players SET wins = wins + 1 WHERE id = %s;', (bye_player[0],))
-        #Now player has received bye - set bye = TRUE
-        c.execute('UPDATE players SET bye = TRUE WHERE id = %s;', (bye_player[0],))
+        c.execute('''UPDATE players
+                     SET wins = wins + 1
+                     WHERE id = %s;''', (bye_player[0],))
+        c.execute('''UPDATE players
+                   SET bye = TRUE
+                   WHERE id = %s;''', (bye_player[0],))
         conn.commit()
-        print ranked_players
-        print bye_player
         ranked_players.remove(bye_player)
         conn.close()
-    #Now ranked_players must have an odd number of players
-    #so we pop them off in pairs in order of rank (want adjacent
-    #players playing each other) to build the pairs return array
+
+    #ranked_players must have even number of players.
+    #Build swiss pairs.
     while ranked_players:
       player1 = ranked_players.pop(0)[:2]
       player2 = ranked_players.pop(0)[:2]
       pairs.append(player1 + player2)
+
     return pairs
 
 
