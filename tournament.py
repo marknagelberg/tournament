@@ -138,38 +138,46 @@ def swissPairings():
         name2: the second player's name
     """
 
-    #Takes the form [(player1, name1, ...), (player2, name2, ...), ...]
-    ranked_players = playerStandings()
-
     #Must assign a bye if there are odd # players
-    odd_num_players = len(ranked_players) % 2
+    odd_num_players = countPlayers() % 2
 
-    #Initialize array of pairs to return
-    pairs = []
+    bye_player = -1
 
+    conn = connect()
+    c = conn.cursor()
     #Assign a bye, add a win and bye to their record
     if odd_num_players:
-        conn = connect()
-        c = conn.cursor()
         c.execute('''SELECT id,
                           name,
                    FROM players
                    WHERE bye = FALSE;''')
-        bye_player = c.fetchone()
-        reportMatch(bye_player[0])
+        bye_player = c.fetchone()[0]
+        reportMatch(bye_player)
         c.execute('''UPDATE players
                    SET bye = TRUE
-                   WHERE id = %s;''', (bye_player[0],))
+                   WHERE id = %s;''', (bye_player,))
         conn.commit()
         conn.close()
-        ranked_players.remove(bye_player)
 
-    #ranked_players must have even number of players.
-    #Build swiss pairs.
-    while ranked_players:
-      player1 = ranked_players.pop(0)[:2]
-      player2 = ranked_players.pop(0)[:2]
-      pairs.append(player1 + player2)
+    c.execute('''CREATE VIEW mwd_table AS
+                 SELECT id, name,
+                  (SELECT count(*)
+                   FROM match_outcomes
+                   WHERE match_outcomes.player = players.id) AS matches,
+                  (SELECT count(*)
+                   FROM match_outcomes
+                   WHERE match_outcomes.player = players.id AND match_outcomes.player_outcome = 'W') AS wins,
+                  (SELECT count(*)
+                   FROM match_outcomes
+                   WHERE match_outcomes.player = players.id AND match_outcomes.player_outcome = 'D') AS draws,
+                  (SELECT count(m3.player)
+                   FROM match_outcomes AS m1, match_outcomes AS m2, match_outcomes AS m3
+                   WHERE m1.player = players.id AND m1.player != m2.player AND m1.match_id = m2.match_id AND m2.player = m3.player AND m3.player_outcome = 'W'
+                   GROUP BY m1.player) AS omw
+                 FROM players;''')
+    c.execute('''CREATE VIEW before_transitive_removal AS SELECT p1.id as player1, p1.name as name1, p2.id as player2, p2.name AS name2 FROM mwd_table AS p1, mwd_table AS p2 WHERE p1.id < p2.id  AND p1.id != %s AND p2.id != %s ORDER BY ABS(p1.wins*3 + p1.draws - p2.wins*3 - p1.draws), ABS(p1.omw - p2.omw);''', (bye_player, bye_player))
+    c.execute('''SELECT DISTINCT ON (player1 IN (SELECT player2 FROM before_transitive_removal)) player1, name1, player2, name2 FROM before_transitive_removal;''')
+    pairs = c.fetchall()
 
     return pairs
 
