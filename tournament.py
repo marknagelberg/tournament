@@ -15,6 +15,7 @@ def deleteMatches():
     """Remove all the match records from the database."""
     conn = connect()
     c = conn.cursor()
+    c.execute('DELETE from match_outcomes;')
     c.execute('DELETE from matches;')
     conn.commit()
     conn.close()
@@ -45,7 +46,7 @@ def registerPlayer(name):
     """
     conn = connect()
     c = conn.cursor()
-    c.execute('INSERT INTO players (name, wins, draws, matches, bye) values (%s, 0, 0, 0, FALSE);', (name,))
+    c.execute('INSERT INTO players (name, bye) values (%s, FALSE);', (name,))
     conn.commit()
     conn.close()
 
@@ -68,15 +69,29 @@ def playerStandings():
     #Create a table as a view that contains player ids and all of the 
     #opponents that player has had. (Next step will be to joining with 
     #matches table and aggregating to get OMW.
-    c.execute('CREATE VIEW playermatches AS SELECT players.id AS pid, CASE WHEN winner = players.id THEN loser WHEN loser = players.id THEN winner END AS opponent FROM players, matches WHERE players.id = winner OR players.id = loser')
-    c.execute('CREATE VIEW omwtable AS SELECT id, COUNT(opponent) AS omw FROM playermatches, matches WHERE playermatches.opponent = winner GROUP BY id;')
-    c.execute('SELECT players.id, name, wins, matches FROM players LEFT OUTER JOIN omwtable ON (players.id = omwtable.id) ORDER BY (wins*3 + draws) DESC, omwtable.omw DESC;')
+    c.execute('''CREATE VIEW mwd_table AS
+                 SELECT id,
+                  (SELECT count(*)
+                   FROM match_outcomes
+                   WHERE match_outcomes.player = players.id) AS matches,
+                  (SELECT count(*)
+                   FROM match_outcomes
+                   WHERE match_outcomes.player = players.id AND match_outcomes.player_outcome = 'W') AS wins,
+                  (SELECT count(*)
+                   FROM match_outcomes
+                   WHERE match_outcomes.player = players.id AND match_outcomes.player_outcome = 'D') AS draws,
+                  (SELECT count(m3.player)
+                   FROM match_outcomes AS m1, match_outcomes AS m2, match_outcomes AS m3
+                   WHERE m1.player = players.id AND m1.player != m2.player AND m1.match_id = m2.match_id AND m2.player = m3.player AND m3.player_outcome = 'W'
+                   GROUP BY m1.player) AS omw
+                 FROM players;''')
+    c.execute('''SELECT players.id, name, wins, matches FROM players, mwd_table WHERE players.id = mwd_table.id ORDER BY (wins*3 + draws) DESC, omw DESC;''')
     standings = c.fetchall()
     conn.close()
     return standings
 
 
-def reportMatch(winner, loser):
+def reportMatch(winner, loser = None, draw = False):
     """Records the outcome of a single match between two players.
 
     Args:
@@ -86,14 +101,23 @@ def reportMatch(winner, loser):
     conn = connect()
     c = conn.cursor()
     #First make sure that the players have not played before (prevent rematches)
-    c.execute('SELECT * from matches where winner = %s AND loser = %s OR winner = %s AND loser = %s', (winner, loser, loser, winner))
+    c.execute('SELECT * from match_outcomes as m1, match_outcomes as m2 WHERE m1.match_id = m2.match_id AND m1.player != m2.player AND m1.player = %s AND m2.player = %s;', (winner, loser))
     if c.fetchone():
       print "Cannot add match - these players have played together already!"
       return
 
-    c.execute('INSERT INTO matches (winner, loser) values (%s, %s);', (winner, loser))
-    c.execute('UPDATE players SET matches = matches + 1 WHERE id = %s OR id = %s;', (winner, loser))
-    c.execute('UPDATE players SET wins = wins + 1 WHERE id = %s;', (winner,))
+    c.execute('''INSERT INTO matches DEFAULT VALUES;''')
+    c.execute('''SELECT max(id) FROM matches;''')
+    m_id = c.fetchone()
+
+    if not loser:
+      c.execute('''INSERT INTO match_outcomes (match_id, player, player_outcome) VALUES (%s, %s, 'B');''', (m_id, winner))
+    elif draw:
+      c.execute('''INSERT INTO match_outcomes (match_id, player, player_outcome) VALUES (%s, %s, 'D');''', (m_id, winner))
+      c.execute('''INSERT INTO match_outcomes (match_id, player, player_outcome) VALUES (%s, %s, 'D');''', (m_id, loser))
+    else:
+      c.execute('''INSERT INTO match_outcomes (match_id, player, player_outcome) VALUES (%s, %s, 'W');''', (m_id, winner))
+      c.execute('''INSERT INTO match_outcomes (match_id, player, player_outcome) VALUES (%s, %s, 'L');''', (m_id, loser))
     conn.commit()
     conn.close()
  
@@ -129,20 +153,16 @@ def swissPairings():
         c = conn.cursor()
         c.execute('''SELECT id,
                           name,
-                          wins,
-                          matches
                    FROM players
                    WHERE bye = FALSE;''')
         bye_player = c.fetchone()
-        c.execute('''UPDATE players
-                     SET wins = wins + 1
-                     WHERE id = %s;''', (bye_player[0],))
+        reportMatch(bye_player[0])
         c.execute('''UPDATE players
                    SET bye = TRUE
                    WHERE id = %s;''', (bye_player[0],))
         conn.commit()
-        ranked_players.remove(bye_player)
         conn.close()
+        ranked_players.remove(bye_player)
 
     #ranked_players must have even number of players.
     #Build swiss pairs.

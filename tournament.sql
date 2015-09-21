@@ -9,6 +9,9 @@
 CREATE DATABASE tournament;
 \c tournament;
 --Idea - set table restrictions ensuring wins <= matches and draws <=
---matches
-CREATE TABLE players(id SERIAL PRIMARY KEY, name TEXT, wins INT, draws INT, matches INT, bye BOOLEAN);
-CREATE TABLE matches(id SERIAL PRIMARY KEY, winner INT REFERENCES players(id), loser INT REFERENCES players(id));
+--matches. Also make sure wins, draws, matches >= 0.
+CREATE TABLE players(id SERIAL PRIMARY KEY, name TEXT, bye BOOLEAN);
+--Matches can take 3 possible outcomes - Lose, Draw, or Win
+CREATE TABLE matches(id SERIAL PRIMARY KEY);
+CREATE TYPE match_outcome AS ENUM('L', 'D', 'W', 'B');
+CREATE TABLE match_outcomes(id SERIAL PRIMARY KEY, match_id INT REFERENCES matches(id), player INT REFERENCES players(id), player_outcome match_outcome);
