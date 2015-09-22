@@ -160,7 +160,7 @@ if __name__ == '__main__':
     testStandingsBeforeMatches()
     testReportMatches()
     testPairings()
-    #testOddPairings()
+    testOddPairings()
     print "Success!  All tests pass!"
 
 
