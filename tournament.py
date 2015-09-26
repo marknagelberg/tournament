@@ -6,7 +6,6 @@
 
 import psycopg2
 
-
 def connect():
     """Connect to the PostgreSQL database.  Returns a database connection."""
     return psycopg2.connect("dbname=tournament")
@@ -42,9 +41,6 @@ def countPlayers():
 def registerPlayer(name):
     """Adds a player to the tournament database.
   
-    The database assigns a unique serial id number for the player.  (This
-    should be handled by your SQL database schema, not in your Python code.)
-  
     Args:
       name: the player's full name (need not be unique).
     """
@@ -73,40 +69,9 @@ def playerStandings():
     conn = connect()
     c = conn.cursor()
 
-    #Create table consisting of player, matches, wins, draws, and
-    #opponent match wins (omw)
-    c.execute('''CREATE VIEW mwd_table AS
-                 SELECT id,
-                  (SELECT count(*)
-                   FROM match_outcomes
-                   WHERE match_outcomes.player = players.id) AS matches,
-                  (SELECT count(*)
-                   FROM match_outcomes
-                   WHERE match_outcomes.player = players.id
-                         AND match_outcomes.player_outcome = 'W') AS wins,
-                  (SELECT count(*)
-                   FROM match_outcomes
-                   WHERE match_outcomes.player = players.id
-                         AND match_outcomes.player_outcome = 'D') AS draws,
-                  (SELECT count(*)
-                   FROM match_outcomes
-                   WHERE match_outcomes.player = players.id
-                         AND match_outcomes.player_outcome = 'B') AS byes,
-                  (SELECT count(m3.player)
-                   FROM match_outcomes AS m1,
-                        match_outcomes AS m2,
-                        match_outcomes AS m3
-                   WHERE m1.player = players.id
-                         AND m1.player != m2.player
-                         AND m1.match_id = m2.match_id
-                         AND m2.player = m3.player
-                         AND m3.player_outcome = 'W'
-                   GROUP BY m1.player) AS omw
-                 FROM players;''')
-
     #Rank the players (wins worth 3, draws worth 1, byes worth 3)
     c.execute('''SELECT players.id,
-                        name,
+                        players.name,
                         wins,
                         matches
                  FROM players,
@@ -219,68 +184,18 @@ def swissPairings():
                      WHERE id = %s;''', (bye_player,))
         conn.commit()
 
-    #Create table consisting of player, matches, wins, draws, and
-    #opponent match wins (omw)
-    c.execute('''CREATE VIEW mwd_table AS
-                 SELECT id, name,
-                  (SELECT count(*)
-                   FROM match_outcomes
-                   WHERE match_outcomes.player = players.id) AS matches,
-                  (SELECT count(*)
-                   FROM match_outcomes
-                   WHERE match_outcomes.player = players.id
-                         AND match_outcomes.player_outcome = 'W') AS wins,
-                  (SELECT count(*)
-                   FROM match_outcomes
-                   WHERE match_outcomes.player = players.id
-                         AND match_outcomes.player_outcome = 'D') AS draws,
-                  (SELECT count(*)
-                   FROM match_outcomes
-                   WHERE match_outcomes.player = players.id
-                         AND match_outcomes.player_outcome = 'B') AS byes,
-                  (SELECT count(m3.player)
-                   FROM match_outcomes AS m1,
-                        match_outcomes AS m2,
-                        match_outcomes AS m3
-                   WHERE m1.player = players.id
-                         AND m1.player != m2.player
-                         AND m1.match_id = m2.match_id
-                         AND m2.player = m3.player
-                         AND m3.player_outcome = 'W'
-                   GROUP BY m1.player) AS omw
-                 FROM players;''')
-
-    #Find each possible pair of players and order pairs
-    #so that they are adjacent to their closest scoring
-    #competitors.
-    c.execute('''CREATE VIEW before_duplicate_removal
-                 AS
-                  SELECT p1.id as player1,
-                         p1.name as name1,
-                         p2.id as player2,
-                         p2.name AS name2
-                  FROM mwd_table AS p1,
-                       mwd_table AS p2
-                  WHERE p1.id < p2.id
-                        AND p1.id != %s
-                        AND p2.id != %s
-                  ORDER BY ABS(p1.wins*3 + p1.draws + p1.byes*3 - p2.wins*3 - p2.draws - p2.byes*3),
-                           ABS(p1.omw - p2.omw);''', (bye_player, bye_player))
-
-    #Ensure the same player does not appear in multiple rows and
-    #prevent rematches.
-    c.execute('''SELECT DISTINCT ON (player1 IN (SELECT player2 FROM before_duplicate_removal))
-                                     player1,
-                                     name1,
-                                     player2,
-                                     name2
-                 FROM before_duplicate_removal
-                 WHERE NOT EXISTS(SELECT * FROM match_outcomes as m1, match_outcomes AS m2
-                                 WHERE m1.match_id = m2.match_id
-                                 AND m1.player = player1
-                                 AND m2.player = player2);''')
+    #Select pairs from the ranked_players view with the bye player removed.
+    c.execute('''WITH ranked_removing_bye AS 
+                (SELECT * FROM ranked_players WHERE ranked_players.id != %s) 
+                SELECT t1.id,
+                       t1.name,
+                       t2.id,
+                       t2.name
+                 FROM ranked_removing_bye AS t1 JOIN ranked_removing_bye AS t2 ON t1.player_rank + 1 = t2.player_rank
+                 WHERE mod(t1.player_rank, 2) = 1
+                 AND mod(t2.player_rank, 2) = 0;''', (bye_player, ))
     pairs = c.fetchall()
-
+    print pairs
     return pairs
 
 
