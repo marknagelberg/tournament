@@ -15,8 +15,8 @@ def deleteMatches():
     """Remove all the match records from the database."""
     conn = connect()
     c = conn.cursor()
-    c.execute('DELETE from match_outcomes;')
-    c.execute('DELETE from matches;')
+    c.execute('DELETE FROM match_outcomes;')
+    c.execute('DELETE FROM matches;')
     conn.commit()
     conn.close()
 
@@ -25,7 +25,7 @@ def deletePlayers():
     """Remove all the player records from the database."""
     conn = connect()
     c = conn.cursor()
-    c.execute('DELETE from players;')
+    c.execute('DELETE FROM players;')
     conn.commit()
     conn.close()
 
@@ -34,7 +34,7 @@ def countPlayers():
     """Returns the number of players currently registered."""
     conn = connect()
     c = conn.cursor()
-    c.execute('SELECT count(*) from players;')
+    c.execute('SELECT count(*) FROM players;')
     return c.fetchone()[0]
 
 
@@ -46,7 +46,7 @@ def registerPlayer(name):
     """
     conn = connect()
     c = conn.cursor()
-    c.execute('INSERT INTO players (name, bye) values (%s, FALSE);', (name,))
+    c.execute('INSERT INTO players (name, bye) VALUES (%s, FALSE);', (name,))
     conn.commit()
     conn.close()
 
@@ -55,9 +55,6 @@ def playerStandings():
     """Returns a list of the players and their win records, sorted by points
        determined by the formula 3*wins + 3*byes + draws. This scoring scheme
        is taken from http://www.wizards.com/dci/downloads/swiss_pairings.pdf
-
-    The first entry in the list should be the player in first place, or a player
-    tied for first place if there is currently a tie.
 
     Returns:
       A list of tuples, each of which contains (id, name, wins, matches):
@@ -69,17 +66,11 @@ def playerStandings():
     conn = connect()
     c = conn.cursor()
 
-    #Rank the players (wins worth 3, draws worth 1, byes worth 3)
-    c.execute('''SELECT players.id,
-                        players.name,
+    c.execute('''SELECT id,
+                        name,
                         wins,
                         matches
-                 FROM players,
-                      mwd_table
-                 WHERE players.id = mwd_table.id
-                 ORDER BY (wins*3 + draws + byes*3) DESC,
-                          omw DESC;''')
-
+                 FROM ranked_players;''')
     standings = c.fetchall()
     conn.close()
     return standings
@@ -100,18 +91,7 @@ def reportMatch(winner, loser = None, draw = False):
     conn = connect()
     c = conn.cursor()
 
-    #First make sure that the players have not played before (prevent rematches)
-    c.execute('''SELECT *
-                 FROM match_outcomes as m1,
-                      match_outcomes as m2
-                 WHERE m1.match_id = m2.match_id
-                       AND m1.player != m2.player
-                       AND m1.player = %s
-                       AND m2.player = %s;''', (winner, loser))
-    if c.fetchone():
-      raise ValueError("Cannot add match - these players have played together already!")
-      return
-
+    #Add a new match id m_id and retrieve it.
     c.execute('''INSERT INTO matches DEFAULT VALUES;''')
     c.execute('''SELECT max(id) FROM matches;''')
     m_id = c.fetchone()
@@ -156,8 +136,12 @@ def swissPairings():
   
     Assuming that there are an even number of players registered, each player
     appears exactly once in the pairings.  Each player is paired with another
-    player with an equal or nearly-equal win record, that is, a player adjacent
-    to him or her in the standings.
+    player with an equal or nearly-equal score (3 * #wins + 3 * #byes + #draws).
+    That is, a player is matched to the player adjacent in the standings in the
+    ranked_players view.
+
+    If there are an odd number of players, a bye is assigned to a player that has
+    not received one yet and that player is not returned in the list of pairs.
   
     Returns:
       A list of tuples, each of which contains (id1, name1, id2, name2)
@@ -191,11 +175,11 @@ def swissPairings():
                        t1.name,
                        t2.id,
                        t2.name
-                 FROM ranked_removing_bye AS t1 JOIN ranked_removing_bye AS t2 ON t1.player_rank + 1 = t2.player_rank
+                 FROM ranked_removing_bye AS t1
+                      JOIN ranked_removing_bye AS t2 ON t1.player_rank + 1 = t2.player_rank
                  WHERE mod(t1.player_rank, 2) = 1
                  AND mod(t2.player_rank, 2) = 0;''', (bye_player, ))
     pairs = c.fetchall()
-    print pairs
     return pairs
 
 
