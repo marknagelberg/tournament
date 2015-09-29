@@ -15,8 +15,8 @@ def deleteMatches():
     """Remove all the match records from the database."""
     conn = connect()
     c = conn.cursor()
-    c.execute('DELETE FROM match_outcomes;')
-    c.execute('DELETE FROM matches;')
+    c.execute('''DELETE FROM match_outcomes;''')
+    c.execute('''DELETE FROM matches;''')
     conn.commit()
     conn.close()
 
@@ -25,7 +25,7 @@ def deletePlayers():
     """Remove all the player records from the database."""
     conn = connect()
     c = conn.cursor()
-    c.execute('DELETE FROM players;')
+    c.execute('''DELETE FROM players;''')
     conn.commit()
     conn.close()
 
@@ -34,8 +34,11 @@ def countPlayers():
     """Returns the number of players currently registered."""
     conn = connect()
     c = conn.cursor()
-    c.execute('SELECT count(*) FROM players;')
-    return c.fetchone()[0]
+    c.execute('''SELECT count(*)
+                 FROM players;''')
+    number_of_players = c.fetchone()[0]
+    conn.close()
+    return number_of_players
 
 
 def registerPlayer(name):
@@ -46,7 +49,8 @@ def registerPlayer(name):
     """
     conn = connect()
     c = conn.cursor()
-    c.execute('INSERT INTO players (name, bye) VALUES (%s, FALSE);', (name,))
+    c.execute('''INSERT INTO players (name, bye)
+                 VALUES (%s, FALSE);''', (name,))
     conn.commit()
     conn.close()
 
@@ -157,8 +161,7 @@ def swissPairings():
     odd_num_players = countPlayers() % 2
     bye_player = -1
     if odd_num_players:
-        c.execute('''SELECT id,
-                            name
+        c.execute('''SELECT id
                      FROM players
                      WHERE bye = FALSE;''')
         bye_player = c.fetchone()[0]
@@ -167,6 +170,15 @@ def swissPairings():
                      SET bye = TRUE
                      WHERE id = %s;''', (bye_player,))
         conn.commit()
+
+        #If all of the players have a bye, then reassign
+        #everyone's bye to 0 to restart the process.
+        c.execute('''SELECT *
+                     FROM players
+                     WHERE bye = FALSE;''')
+        if not c.fetchall():
+          c.execute('''UPDATE players
+                       SET bye = FALSE;''')
 
     #Select pairs from the ranked_players view with the bye player removed.
     c.execute('''WITH ranked_removing_bye AS 
@@ -180,6 +192,7 @@ def swissPairings():
                  WHERE mod(t1.player_rank, 2) = 1
                  AND mod(t2.player_rank, 2) = 0;''', (bye_player, ))
     pairs = c.fetchall()
+    conn.close()
     return pairs
 
 
